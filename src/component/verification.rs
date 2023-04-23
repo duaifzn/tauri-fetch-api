@@ -42,19 +42,19 @@ impl Component for Verification {
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             VerificationMsg::UpdateTokenid(v) => {
-                self.tokenid = v;
+                self.tokenid = v.trim().to_string();
                 true
             }
             VerificationMsg::UpdateApikey(v) => {
-                self.apikey = v;
+                self.apikey = v.trim().to_string();
                 true
             }
             VerificationMsg::UpdateSignature(v) => {
-                self.signature = v;
+                self.signature = v.trim().to_string();
                 true
             }
             VerificationMsg::UpdateProof(v) => {
-                self.proof = v;
+                self.proof = v.trim().to_string();
                 true
             }
             VerificationMsg::GetVireficationData() => {

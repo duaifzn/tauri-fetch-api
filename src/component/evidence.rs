@@ -37,11 +37,11 @@ impl Component for Evidence {
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             EvidenceMsg::UpdateTokenid(v) => {
-                self.tokenid = v;
+                self.tokenid = v.trim().to_string();
                 true
             }
             EvidenceMsg::UpdateApikey(v) => {
-                self.apikey = v;
+                self.apikey = v.trim().to_string();
                 true
             }
             EvidenceMsg::GetEvidenceData() => {

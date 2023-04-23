@@ -1,5 +1,4 @@
 mod component;
-mod route;
 mod dto;
 use crate::component::app::App;
 use yew;
