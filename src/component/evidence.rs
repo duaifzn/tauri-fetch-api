@@ -1,6 +1,6 @@
 use crate::dto::tauri_command::TauriCommand;
 use crate::dto::tauri_request_dto;
-use serde_wasm_bindgen::{ self, to_value, from_value};
+use serde_wasm_bindgen::{self, from_value, to_value};
 use wasm_bindgen::prelude::*;
 use web_sys::{Event, HtmlInputElement, InputEvent};
 use yew::{html, Component, Context, Html};
@@ -15,6 +15,7 @@ pub struct Evidence {
     tokenid: String,
     apikey: String,
     evidence_data: String,
+    handle_loading_state: bool,
 }
 
 pub enum EvidenceMsg {
@@ -22,6 +23,7 @@ pub enum EvidenceMsg {
     UpdateApikey(String),
     GetEvidenceData(),
     UpdateEvidenceData(String),
+    HandleLoading(),
 }
 
 impl Component for Evidence {
@@ -32,6 +34,7 @@ impl Component for Evidence {
             tokenid: String::from(""),
             apikey: String::from(""),
             evidence_data: String::from(""),
+            handle_loading_state: false,
         }
     }
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
@@ -47,7 +50,7 @@ impl Component for Evidence {
             EvidenceMsg::GetEvidenceData() => {
                 let tokenid = self.tokenid.clone();
                 let apikey = self.apikey.clone();
-                ctx.link().send_future(async move {
+                ctx.link().send_future_batch(async move {
                     let args = to_value(&tauri_request_dto::EvidenceDto {
                         tokenid: &tokenid,
                         apikey: &apikey,
@@ -56,18 +59,32 @@ impl Component for Evidence {
                     match res {
                         Ok(data) => {
                             let d: serde_json::Value = from_value(data).unwrap();
-                            return EvidenceMsg::UpdateEvidenceData(serde_json::to_string_pretty(&d).unwrap())
-                        },
+                            return vec![
+                                EvidenceMsg::UpdateEvidenceData(
+                                    serde_json::to_string_pretty(&d).unwrap(),
+                                ),
+                                EvidenceMsg::HandleLoading(),
+                            ];
+                        }
                         Err(err) => {
                             let e: serde_json::Value = from_value(err).unwrap();
-                            return EvidenceMsg::UpdateEvidenceData(serde_json::to_string_pretty(&e).unwrap())
-                        },
+                            return vec![
+                                EvidenceMsg::UpdateEvidenceData(
+                                    serde_json::to_string_pretty(&e).unwrap(),
+                                ),
+                                EvidenceMsg::HandleLoading(),
+                            ];
+                        }
                     }
                 });
                 true
             }
             EvidenceMsg::UpdateEvidenceData(v) => {
                 self.evidence_data = v;
+                true
+            }
+            EvidenceMsg::HandleLoading() => {
+                self.handle_loading_state = !self.handle_loading_state;
                 true
             }
         }
@@ -85,7 +102,9 @@ impl Component for Evidence {
             let target: HtmlInputElement = event_target.dyn_into().unwrap_throw();
             EvidenceMsg::UpdateApikey(target.value())
         });
-        let onclick = ctx.link().callback(|_| EvidenceMsg::GetEvidenceData());
+        let onclick = ctx
+            .link()
+            .batch_callback(|_| vec![EvidenceMsg::GetEvidenceData(), EvidenceMsg::HandleLoading()]);
 
         html! {
             <div class="p-3">
@@ -98,12 +117,30 @@ impl Component for Evidence {
                     <span class="input-group-text">{"Apikey"}</span>
                     <input oninput={oninput2} type="text" class="form-control text-dark" placeholder="apikey" />
                 </div>
-                <button {onclick} >{ "Evidence" }</button>
+                <button {onclick} disabled={self.handle_loading_state}>
+                    { self.handle_loading() }
+                </button>
                 <div class="form-floating">
                     <textarea class="form-control" style="height: 300px" value={self.evidence_data.clone() }/>
                 </div>
 
             </div>
+        }
+    }
+}
+
+impl Evidence {
+    fn handle_loading(&self) -> Html {
+        match self.handle_loading_state {
+            true => html! {
+                <>
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    <span class="sr-only">{"Loading..."}</span>
+                </>
+            },
+            false => html! {
+                { "Evidence" }
+            },
         }
     }
 }

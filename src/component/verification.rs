@@ -1,5 +1,5 @@
 use crate::dto::{tauri_command::TauriCommand, tauri_request_dto::VerificationDto};
-use serde_wasm_bindgen::{to_value, from_value};
+use serde_wasm_bindgen::{from_value, to_value};
 use wasm_bindgen::prelude::*;
 use web_sys::{Event, HtmlInputElement, InputEvent};
 use yew::{html, Component, Context, Html};
@@ -15,6 +15,7 @@ pub struct Verification {
     signature: String,
     proof: String,
     verification_data: String,
+    handle_loading_state: bool,
 }
 
 pub enum VerificationMsg {
@@ -24,6 +25,7 @@ pub enum VerificationMsg {
     UpdateProof(String),
     GetVireficationData(),
     UpdateVireficationData(String),
+    HandleLoading(),
 }
 
 impl Component for Verification {
@@ -36,6 +38,7 @@ impl Component for Verification {
             signature: String::from(""),
             proof: String::from(""),
             verification_data: String::from(""),
+            handle_loading_state: false,
         }
     }
 
@@ -62,7 +65,7 @@ impl Component for Verification {
                 let apikey = self.apikey.clone();
                 let signature = self.signature.clone();
                 let proof = self.proof.clone();
-                ctx.link().send_future(async move {
+                ctx.link().send_future_batch(async move {
                     let args = to_value(&VerificationDto {
                         tokenid: &tokenid,
                         apikey: &apikey,
@@ -70,22 +73,35 @@ impl Component for Verification {
                         proof: &proof,
                     });
                     let res = invoke(&TauriCommand::Verification.to_string(), args.unwrap()).await;
-                    match res{
+                    match res {
                         Ok(data) => {
                             let d: serde_json::Value = from_value(data).unwrap();
-                            VerificationMsg::UpdateVireficationData(serde_json::to_string_pretty(&d).unwrap())
+                            vec![
+                                VerificationMsg::UpdateVireficationData(
+                                    serde_json::to_string_pretty(&d).unwrap(),
+                                ),
+                                VerificationMsg::HandleLoading(),
+                            ]
                         }
-                    ,
                         Err(err) => {
                             let e: serde_json::Value = from_value(err).unwrap();
-                            VerificationMsg::UpdateVireficationData(serde_json::to_string_pretty(&e).unwrap())
-                        },
+                            vec![
+                                VerificationMsg::UpdateVireficationData(
+                                    serde_json::to_string_pretty(&e).unwrap(),
+                                ),
+                                VerificationMsg::HandleLoading(),
+                            ]
+                        }
                     }
                 });
                 true
             }
             VerificationMsg::UpdateVireficationData(v) => {
                 self.verification_data = v;
+                true
+            }
+            VerificationMsg::HandleLoading() => {
+                self.handle_loading_state = !self.handle_loading_state;
                 true
             }
         }
@@ -116,9 +132,12 @@ impl Component for Verification {
             let target: HtmlInputElement = event_target.dyn_into().unwrap_throw();
             VerificationMsg::UpdateProof(target.value())
         });
-        let onclick = ctx
-            .link()
-            .callback(|_| VerificationMsg::GetVireficationData());
+        let onclick = ctx.link().batch_callback(|_| {
+            vec![
+                VerificationMsg::GetVireficationData(),
+                VerificationMsg::HandleLoading(),
+            ]
+        });
 
         html! {
             <div class="p-3">
@@ -142,7 +161,9 @@ impl Component for Verification {
                     <span class="input-group-text">{"Proof"}</span>
                     <input oninput={oninput4} type="text" class="form-control" placeholder="proof"/>
                 </div>
-                <button {onclick}>{ "Verify" }</button>
+                <button {onclick} disabled={self.handle_loading_state}>
+                    { self.handle_loading() }
+                </button>
                 <div class="form-floating">
                     <textarea class="form-control" style="height: 300px" value={self.verification_data.clone()}/>
 
@@ -150,6 +171,22 @@ impl Component for Verification {
                 </div>
 
             </div>
+        }
+    }
+}
+
+impl Verification {
+    fn handle_loading(&self) -> Html {
+        match self.handle_loading_state {
+            true => html! {
+                <>
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    <span class="sr-only">{"Loading..."}</span>
+                </>
+            },
+            false => html! {
+                { "Verify" }
+            },
         }
     }
 }
